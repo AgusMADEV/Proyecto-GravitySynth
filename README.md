@@ -47,7 +47,13 @@ Es una evolución creativa de los ejercicios de clase sobre síntesis de audio y
 - **Envelope ADSR simple** para dar forma a cada nota
 - **Control de volumen maestro** y duración de notas
 - **Efecto de reverb** ajustable
-
+### 🎹 Secuenciador 16-Step
+- **Grid interactivo** de 16 columnas × 7 filas (notas C5 a D4)
+- **Reproducción sincronizada** con BPM ajustable (60-220)
+- **Controles Play/Stop/Clear** para el secuenciador
+- **Resaltado visual** de la columna activa durante playback
+- **Integración completa** con el motor de síntesis de audio existente
+- **Patrones editables** click para activar/desactivar celdas
 ### ⚛️ Motor de Física
 - **Gravedad configurable** con toggle ON/OFF
 - **Colisiones realistas** entre partículas usando impulsos
@@ -85,6 +91,8 @@ Es una evolución creativa de los ejercicios de clase sobre síntesis de audio y
 - Juega con el **tipo de oscilador** para cambiar el timbre del sonido
 - Desactiva la **gravedad** para crear patrones más caóticos
 - Aumenta la **masa** de las partículas para colisiones más dramáticas
+- Crea **patrones rítmicos** con el secuenciador 16-step mientras las partículas generan melodías aleatorias
+- Combina **múltiples modos**: secuenciador para ritmo base + partículas para variación
 
 ---
 
@@ -130,6 +138,21 @@ Es una evolución creativa de los ejercicios de clase sobre síntesis de audio y
 | **Volumen Principal** | 0-100% | Volumen global de salida |
 | **Duración Nota** | 50-1000 ms | Cuánto dura cada nota al colisionar |
 | **Reverb** | 0-100% | Cantidad de reverberación |
+
+#### 🎹 Secuenciador 16-Step
+| Control | Función |
+|---------|----------|
+| **▶️ Play** | Inicia la reproducción del patrón |
+| **⏸️ Stop** | Detiene la reproducción |
+| **🗑️ Clear** | Borra todo el patrón del grid |
+| **BPM Slider** | Ajusta el tempo (60-220 BPM) |
+| **Grid Cells** | Click para activar/desactivar notas en cada paso |
+
+**Notas disponibles en el secuenciador:**
+- C5, B4, A4, G4, F4, E4, D4 (7 notas en total)
+- 16 pasos por patrón (1 compas de 4/4 en semicorcheas)
+- Resaltado amarillo indica la columna actual durante playback
+- Resaltado naranja indica notas activas siendo reproducidas
 
 ---
 

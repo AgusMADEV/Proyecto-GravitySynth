@@ -425,6 +425,82 @@
             border-color: rgba(255, 140, 0, 1);
             box-shadow: 0 0 10px rgba(255, 140, 0, 1);
         }
+
+        /* Composition Library Styles */
+        .save-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .save-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 13px;
+            backdrop-filter: blur(10px);
+        }
+
+        .save-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .composition-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+
+        .composition-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .composition-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+
+        .composition-item.selected {
+            background: rgba(66, 165, 245, 0.3);
+            border-color: rgba(66, 165, 245, 0.8);
+        }
+
+        .composition-title {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .composition-meta {
+            font-size: 10px;
+            opacity: 0.7;
+        }
+
+        .btn-save {
+            background: rgba(76, 175, 80, 0.6);
+            border-color: rgba(76, 175, 80, 1);
+        }
+
+        .btn-save:hover {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .compositions-empty {
+            text-align: center;
+            padding: 20px;
+            opacity: 0.6;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -540,6 +616,19 @@
                 </div>
                 <div id="sequencerGrid" class="sequencer-grid">
                     <!-- Grid generado dinámicamente -->
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>💾 Composiciones Guardadas</h3>
+                <div class="save-controls">
+                    <input type="text" id="saveTitle" class="save-input" placeholder="Título de la composición...">
+                    <textarea id="saveDescription" class="save-input" rows="2" placeholder="Descripción (opcional)"></textarea>
+                    <button id="btnSaveComposition" class="seq-btn btn-save">💾 Guardar Composición</button>
+                    <button id="btnRefreshList" class="seq-btn">🔄 Actualizar Lista</button>
+                </div>
+                <div id="compositionList" class="composition-list">
+                    <div class="compositions-empty">Cargando composiciones...</div>
                 </div>
             </div>
 
@@ -1175,7 +1264,169 @@
         // Initialize sequencer grid
         buildSequencerGrid();
 
+        // ==================== COMPOSITION MANAGEMENT ====================
+        const API_BASE = 'http://127.0.0.1:5000/api';
+        let selectedCompositionId = null;
+
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    headers: { 'Content-Type': 'application/json' },
+                    ...options
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.error || 'Error en la API');
+                }
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                alert('Error: ' + error.message);
+                throw error;
+            }
+        }
+
+        async function saveComposition() {
+            const title = document.getElementById('saveTitle').value.trim();
+            if (!title) {
+                alert('Por favor, ingresa un título para la composición');
+                return;
+            }
+
+            const composition = {
+                title: title,
+                description: document.getElementById('saveDescription').value.trim(),
+                bpm: sequencer.bpm,
+                waveType: settings.waveType,
+                sequencerGrid: sequencer.grid,
+                settings: {
+                    particleRadius: settings.particleRadius,
+                    initialVelocity: settings.initialVelocity,
+                    particleMass: settings.particleMass,
+                    gravity: settings.gravity,
+                    gravityEnabled: settings.gravityEnabled,
+                    masterVolume: settings.masterVolume,
+                    noteDuration: settings.noteDuration,
+                    reverbAmount: settings.reverbAmount
+                }
+            };
+
+            try {
+                const result = await apiCall('/compositions', {
+                    method: 'POST',
+                    body: JSON.stringify(composition)
+                });
+                
+                alert(`✅ ${result.message}`);
+                document.getElementById('saveTitle').value = '';
+                document.getElementById('saveDescription').value = '';
+                await loadCompositions();
+            } catch (error) {
+                console.error('Error guardando:', error);
+            }
+        }
+
+        async function loadCompositions() {
+            const listContainer = document.getElementById('compositionList');
+            
+            try {
+                const result = await apiCall('/compositions');
+                const compositions = result.compositions;
+
+                if (!compositions || compositions.length === 0) {
+                    listContainer.innerHTML = '<div class="compositions-empty">No hay composiciones guardadas</div>';
+                    return;
+                }
+
+                listContainer.innerHTML = compositions.map(comp => `
+                    <div class="composition-item" data-id="${comp.id}">
+                        <div class="composition-title">${comp.title}</div>
+                        <div class="composition-meta">
+                            ${comp.bpm} BPM · ${comp.wave_type} · ${comp.author_name || 'Anónimo'}
+                        </div>
+                        ${comp.description ? `<div class="composition-meta" style="margin-top: 4px">${comp.description}</div>` : ''}
+                    </div>
+                `).join('');
+
+                // Click handlers
+                document.querySelectorAll('.composition-item').forEach(item => {
+                    item.addEventListener('click', () => loadComposition(parseInt(item.dataset.id)));
+                });
+            } catch (error) {
+                listContainer.innerHTML = '<div class="compositions-empty">⚠️ Error cargando composiciones.<br>Asegúrate de que el servidor Flask esté corriendo.</div>';
+            }
+        }
+
+        async function loadComposition(compId) {
+            try {
+                const result = await apiCall(`/compositions/${compId}`);
+                const comp = result.composition;
+
+                // Stop sequencer if playing
+                if (sequencer.isPlaying) {
+                    stopSequencer();
+                }
+
+                // Load sequencer grid
+                sequencer.grid = comp.sequencer_grid;
+                sequencer.bpm = comp.bpm;
+                document.getElementById('bpmValue').textContent = comp.bpm;
+                document.getElementById('bpmSlider').value = comp.bpm;
+
+                // Load wave type
+                settings.waveType = comp.wave_type;
+                document.getElementById('waveType').value = comp.wave_type;
+
+                // Load settings
+                const loadedSettings = comp.settings_json;
+                Object.keys(loadedSettings).forEach(key => {
+                    if (settings.hasOwnProperty(key)) {
+                        settings[key] = loadedSettings[key];
+                    }
+                });
+
+                // Update UI controls
+                ranges.forEach(range => {
+                    const input = document.getElementById(range.id);
+                    const display = document.getElementById(range.display);
+                    if (input && display) {
+                        input.value = settings[range.prop];
+                        display.textContent = settings[range.prop] + range.suffix;
+                    }
+                });
+
+                // Rebuild grid with loaded data
+                buildSequencerGrid();
+                const cells = document.querySelectorAll('.seq-cell');
+                cells.forEach(cell => {
+                    const row = parseInt(cell.dataset.row);
+                    const col = parseInt(cell.dataset.col);
+                    if (sequencer.grid[row][col]) {
+                        cell.classList.add('active');
+                    }
+                });
+
+                // Highlight selected composition
+                document.querySelectorAll('.composition-item').forEach(item => {
+                    item.classList.toggle('selected', parseInt(item.dataset.id) === compId);
+                });
+
+                selectedCompositionId = compId;
+                alert(`✅ Composición "${comp.title}" cargada`);
+            } catch (error) {
+                console.error('Error cargando composición:', error);
+            }
+        }
+
+        // Composition controls
+        document.getElementById('btnSaveComposition').addEventListener('click', saveComposition);
+        document.getElementById('btnRefreshList').addEventListener('click', loadCompositions);
+
+        // Load compositions on startup
+        loadCompositions();
+
         // ==================== ANIMATION LOOP ====================
+
         let lastTime = performance.now();
         let frames = 0;
         let fpsTime = 0;
