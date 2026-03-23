@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from flask import Flask, jsonify, send_file, request
+from flask import Flask, jsonify, render_template, request
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "gravitational_synth.sqlite3"
@@ -109,7 +109,7 @@ def seed_demo_data() -> None:
 @app.route("/")
 def home():
     """Sirve el archivo HTML principal"""
-    return send_file("index.html")
+    return render_template("index.html")
 
 
 @app.route("/api/health")
