@@ -343,6 +343,88 @@
                 padding: 8px;
             }
         }
+
+        /* Secuenciador Styles */
+        .sequencer-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .seq-btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .seq-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .seq-btn.active {
+            background: rgba(76, 175, 80, 0.8);
+            border-color: rgba(76, 175, 80, 1);
+        }
+
+        .sequencer-grid {
+            display: grid;
+            grid-template-columns: 30px repeat(16, 12px);
+            gap: 2px;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+
+        .seq-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+            padding: 2px;
+        }
+
+        .seq-cell {
+            width: 12px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .seq-cell:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.15);
+        }
+
+        .seq-cell.active {
+            background: rgba(76, 175, 80, 0.9);
+            border-color: rgba(76, 175, 80, 1);
+            box-shadow: 0 0 6px rgba(76, 175, 80, 0.8);
+        }
+
+        .seq-cell.playing {
+            background: rgba(255, 215, 0, 0.9);
+            border-color: rgba(255, 215, 0, 1);
+            box-shadow: 0 0 8px rgba(255, 215, 0, 0.8);
+        }
+
+        .seq-cell.active.playing {
+            background: rgba(255, 140, 0, 1);
+            border-color: rgba(255, 140, 0, 1);
+            box-shadow: 0 0 10px rgba(255, 140, 0, 1);
+        }
     </style>
 </head>
 <body>
@@ -443,6 +525,24 @@
                 </div>
             </div>
 
+            <div class="control-group">
+                <h3>🎹 Secuenciador 16-Step</h3>
+                <div class="sequencer-controls">
+                    <button id="btnPlaySeq" class="seq-btn">▶️ Play</button>
+                    <button id="btnStopSeq" class="seq-btn">⏸️ Stop</button>
+                    <button id="btnClearSeq" class="seq-btn">🗑️ Clear</button>
+                </div>
+                <div class="control-item">
+                    <label>
+                        BPM: <span class="value-display" id="bpmValue">120</span>
+                    </label>
+                    <input type="range" id="bpmSlider" min="60" max="220" value="120">
+                </div>
+                <div id="sequencerGrid" class="sequencer-grid">
+                    <!-- Grid generado dinámicamente -->
+                </div>
+            </div>
+
             <div class="help-text">
                 💡 <strong>Cómo usar:</strong><br>
                 • Click para crear partículas<br>
@@ -459,6 +559,16 @@
         let masterGainNode = null;
         let reverbNode = null;
         let audioEnabled = false;
+
+        // Secuenciador state
+        const sequencer = {
+            grid: Array(7).fill(null).map(() => Array(16).fill(false)),
+            notes: ['C5', 'B4', 'A4', 'G4', 'F4', 'E4', 'D4'],
+            isPlaying: false,
+            currentStep: 0,
+            bpm: 120,
+            intervalId: null
+        };
 
         // Notas musicales: C4 a C6 (2 octavas)
         const notes = {
@@ -526,6 +636,17 @@
             osc.stop(now + duration / 1000);
             
             stats.notesPlayed++;
+        }
+
+        // Wrapper function for sequencer compatibility
+        function playSound(frequency, note, velocity, duration) {
+            if (!audioEnabled || !audioContext) {
+                initAudio();
+                if (!audioContext) return;
+            }
+            
+            const durationMs = duration * 1000; // Convert to milliseconds
+            playNote(frequency, durationMs, settings.waveType);
         }
 
         // ==================== CANVAS SETUP ====================
@@ -689,8 +810,54 @@
             }
         }
 
+        // ==================== SEQUENCER VISUAL EFFECTS ====================
+        class SequencerVisual {
+            constructor(x, y, note, color) {
+                this.x = x;
+                this.y = y;
+                this.note = note;
+                this.color = color;
+                this.radius = 10;
+                this.maxRadius = 120;
+                this.alpha = 1.0;
+                this.active = true;
+            }
+
+            update() {
+                this.radius += 3;
+                this.alpha = 1 - (this.radius / this.maxRadius);
+                if (this.radius >= this.maxRadius) {
+                    this.active = false;
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                
+                // Outer ring
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Inner glow
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+                gradient.addColorStop(0, this.color + '80');
+                gradient.addColorStop(1, this.color + '00');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+
         // ==================== GAME STATE ====================
         const particles = [];
+        const sequencerVisuals = [];
         const stats = {
             collisionCount: 0,
             notesPlayed: 0
@@ -874,6 +1041,140 @@
             settings.waveType = e.target.value;
         });
 
+        // ==================== SEQUENCER ====================
+        function buildSequencerGrid() {
+            const grid = document.getElementById('sequencerGrid');
+            grid.innerHTML = '';
+            
+            // Header row (step numbers)
+            grid.appendChild(document.createElement('div')); // Empty corner
+            for (let col = 0; col < 16; col++) {
+                const header = document.createElement('div');
+                header.className = 'seq-label';
+                header.textContent = col + 1;
+                grid.appendChild(header);
+            }
+            
+            // Rows with note labels and cells
+            for (let row = 0; row < 7; row++) {
+                // Note label
+                const label = document.createElement('div');
+                label.className = 'seq-label';
+                label.textContent = sequencer.notes[row];
+                grid.appendChild(label);
+                
+                // Cells
+                for (let col = 0; col < 16; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'seq-cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    
+                    cell.addEventListener('click', () => {
+                        sequencer.grid[row][col] = !sequencer.grid[row][col];
+                        cell.classList.toggle('active', sequencer.grid[row][col]);
+                    });
+                    
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        function playSequencerStep() {
+            const cells = document.querySelectorAll('.seq-cell');
+            
+            // Clear previous playing state
+            cells.forEach(cell => cell.classList.remove('playing'));
+            
+            // Highlight current column and play active notes
+            let notesThisStep = 0;
+            for (let row = 0; row < 7; row++) {
+                // querySelectorAll('.seq-cell') returns only cells (7 rows × 16 cols = 112 cells)
+                const cellIndex = row * 16 + sequencer.currentStep;
+                const cell = cells[cellIndex];
+                
+                if (cell) {
+                    cell.classList.add('playing');
+                    
+                    if (sequencer.grid[row][sequencer.currentStep]) {
+                        const note = sequencer.notes[row];
+                        const frequency = notes[note];
+                        playSound(frequency, note, 0.4, settings.noteDuration / 1000);
+                        
+                        // Create visual effect in canvas
+                        const spacing = canvas.height / 8;
+                        const y = spacing * (row + 1);
+                        const x = canvas.width * 0.25 + (notesThisStep * 80);
+                        const color = noteColors[note] || '#FFFFFF';
+                        sequencerVisuals.push(new SequencerVisual(x, y, note, color));
+                        notesThisStep++;
+                    }
+                }
+            }
+            
+            sequencer.currentStep = (sequencer.currentStep + 1) % 16;
+        }
+
+        function startSequencer() {
+            if (sequencer.isPlaying) return;
+            
+            if (!audioEnabled) {
+                initAudio();
+            }
+            
+            sequencer.isPlaying = true;
+            sequencer.currentStep = 0;
+            
+            const interval = (60000 / sequencer.bpm) / 4; // 16th notes
+            sequencer.intervalId = setInterval(playSequencerStep, interval);
+            
+            document.getElementById('btnPlaySeq').classList.add('active');
+            document.getElementById('btnStopSeq').classList.remove('active');
+        }
+
+        function stopSequencer() {
+            if (!sequencer.isPlaying) return;
+            
+            sequencer.isPlaying = false;
+            clearInterval(sequencer.intervalId);
+            sequencer.intervalId = null;
+            
+            // Clear playing highlights
+            document.querySelectorAll('.seq-cell').forEach(cell => {
+                cell.classList.remove('playing');
+            });
+            
+            document.getElementById('btnPlaySeq').classList.remove('active');
+            document.getElementById('btnStopSeq').classList.add('active');
+        }
+
+        function clearSequencer() {
+            stopSequencer();
+            sequencer.grid = Array(7).fill(null).map(() => Array(16).fill(false));
+            document.querySelectorAll('.seq-cell').forEach(cell => {
+                cell.classList.remove('active');
+            });
+        }
+
+        // Sequencer controls
+        document.getElementById('btnPlaySeq').addEventListener('click', startSequencer);
+        document.getElementById('btnStopSeq').addEventListener('click', stopSequencer);
+        document.getElementById('btnClearSeq').addEventListener('click', clearSequencer);
+        
+        document.getElementById('bpmSlider').addEventListener('input', (e) => {
+            sequencer.bpm = parseInt(e.target.value);
+            document.getElementById('bpmValue').textContent = sequencer.bpm;
+            
+            // Restart sequencer with new BPM if playing
+            if (sequencer.isPlaying) {
+                stopSequencer();
+                startSequencer();
+            }
+        });
+
+        // Initialize sequencer grid
+        buildSequencerGrid();
+
         // ==================== ANIMATION LOOP ====================
         let lastTime = performance.now();
         let frames = 0;
@@ -895,6 +1196,45 @@
             // Clear canvas with fade effect
             ctx.fillStyle = 'rgba(102, 126, 234, 0.1)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw sequencer progress bar
+            if (sequencer.isPlaying) {
+                const barHeight = 4;
+                const barY = 10;
+                const barWidth = canvas.width - 40;
+                const barX = 20;
+                
+                // Background bar
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+                
+                // Progress
+                const progress = sequencer.currentStep / 16;
+                ctx.fillStyle = '#4CAF50';
+                ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+                
+                // Step markers
+                for (let i = 0; i <= 16; i++) {
+                    const markerX = barX + (barWidth / 16) * i;
+                    ctx.fillStyle = i === sequencer.currentStep ? '#FFD700' : 'rgba(255, 255, 255, 0.4)';
+                    ctx.fillRect(markerX - 1, barY - 3, 2, barHeight + 6);
+                }
+                
+                // BPM label
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.font = '12px monospace';
+                ctx.fillText(`${sequencer.bpm} BPM | Step ${sequencer.currentStep + 1}/16`, barX, barY - 8);
+            }
+
+            // Update and draw sequencer visuals
+            for (let i = sequencerVisuals.length - 1; i >= 0; i--) {
+                const visual = sequencerVisuals[i];
+                visual.update();
+                visual.draw(ctx);
+                if (!visual.active) {
+                    sequencerVisuals.splice(i, 1);
+                }
+            }
 
             // Update and draw particles
             particles.forEach(particle => {
